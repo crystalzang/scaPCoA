@@ -30,3 +30,9 @@ results$pc_plot
 
 ## Results
 ![](pc_plot.png)
+
+## Authors
+
+**Crystal Zang**, Lu Tang, Rebecca Deek,
+
+Department of Biostatistics and Data Science, University of Pittsburgh School of Public Health
