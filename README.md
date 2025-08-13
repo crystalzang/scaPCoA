@@ -19,10 +19,18 @@ tiveness of the proposed method and highlight its ability to extract meaningful 
 associations while mitigating nuisance effects through simulations and application to real 16S rRNA
 and metagenomic sequencing studies.
 
+## Usage
+
+1. Visualization
+   `supPCoA` can be used to visualize principal coordinate.
+2. Prediction
+   `supPCoA` can be used to make prediction on outcome (continuous or binary) given microbiome and covariates.
+
+
 ## Main Function
 ```
 lambda_ls = seq(0, 10, 0.5)
-results = supPCoA(obj, lambda_ls, pcoa=TRUE)
+results = supPCoA(obj, lambda_ls, nPC = 3, pcoa=TRUE)
 
 # PC plot
 results$pc_plot
