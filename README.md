@@ -21,6 +21,12 @@ and metagenomic sequencing studies.
 
 ## Main Function
 ```
-lambda_ls = seq(0, 1, 0.1)
-supPCoA(obj, lambda_ls, pcoa=TRUE)
+lambda_ls = seq(0, 10, 0.5)
+results = supPCoA(obj, lambda_ls, pcoa=TRUE)
+
+# PC plot
+results$pc_plot
 ```
+
+## Results
+![](pc_plot.png)
