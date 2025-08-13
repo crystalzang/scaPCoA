@@ -8,7 +8,12 @@ library(polycor)
 library(mltools) #mcc
 library(ltm) #point biserial correlation
 library(rstatix) # correlation (ANOVA-based Eta Squared η²)
- 
+
+
+color_palette_cz <- c("#27548A", "#DDA853", "#3F7D58", 
+                      "#C84D6A","#A6C36F", "#3B8D5D")   # teal)
+
+
 
 ###########################################
 ######  From Pedecure  ####################
@@ -526,6 +531,29 @@ trosset_out_of_sample <- function(X_train_hat, A_tt, return_beta = FALSE) {
 }
 
 
+calc_feature_importance <- function(eigen_vectors, eigen_values, X_train){
+  eigen_vectors_standard <- scale(eigen_vectors)
+  # Compute covariance of variables with all axes
+  S <- cov(X_train, eigen_vectors_standard)
+  sum_weighted <- as.vector(t(eigen_values %*% t(S[,1:ncol(S)]))) # weighted sum (CZ)
+  
+  # Standardize value of covariance (see Legendre & Legendre 1998)
+  U <- S %*% diag((eigen_values/(nrow(X_train)- 1))^(-0.5))
+  colnames(U) <- colnames(eigen_vectors)
+  
+  
+  U_df <- U %>%
+    data.frame()%>%
+    mutate(sum = abs(rowSums(.)),
+           sum_weighted = abs(sum_weighted))%>%
+    rownames_to_column(var = "feature")%>%
+    mutate(
+      rank_sum = rank(-sum, ties.method = "min"),  # Rank 1 = highest sum
+      rank_sum_weighted = rank(-sum_weighted, ties.method = "min")  # Rank 1 = highest sum_weighted
+    )
+  return(U_df)
+}
+
 estimate_x_tilde <- function(X.orig, A, Y, npc,lambda_ls) {
   tryCatch({
     # Scale the input matrix
@@ -665,8 +693,7 @@ estimate_x_star <- function(X.orig, Y, A, npc, lambda_ls) {
     # }
   })
 }
-
-supPCoA <- function(obj, lambda_ls, pcoa){
+supPCoA <- function(obj, lambda_ls, pcoa, nPC=3){
     results = list()
     lambda_optimal_ls <- list()
     
@@ -689,13 +716,13 @@ supPCoA <- function(obj, lambda_ls, pcoa){
     if(pcoa == FALSE){
       print("s+acPCA (Residualization)")
       #X_hat <- X_hat[, apply(X_hat, 2, var) != 0]
-      X_hat <- clr(X_train) #centerd log transformation
+      X_hat <- clr(X) #centerd log transformation
       X_hat <- X_hat[, apply(X_hat, 2, var) != 0]
       dim(X_hat)
     }else{
       print("s+acPCoA (Residualization)")
       print("Use bray curtis for X decomposition. Obtained X_hat.")
-      eigen_output <-  eigen_bray(X_train, pos=TRUE)
+      eigen_output <-  eigen_bray(X, pos=TRUE)
       eigen_vectors <- eigen_output$eigenvectors
       eigen_values = eigen_output$eigenvalues
       
@@ -720,7 +747,7 @@ supPCoA <- function(obj, lambda_ls, pcoa){
                                   lambdas = lambda_ls,
                                   A = A,
                                   Y = Y,
-                                  nPC = 3, centerX = T, scaleX = T)
+                                  nPC = nPC, centerX = T, scaleX = T)
       
       
       best.lambda = lambda.tune$lambda_tune
@@ -734,7 +761,7 @@ supPCoA <- function(obj, lambda_ls, pcoa){
                               A = A,
                               Y = Y,
                               lambda = best.lambda,
-                              nPC = 3, centerX = T, scaleX = T)
+                              nPC = nPC, centerX = T, scaleX = T)
       
       v_hat = pedecure.out$vectors
       PC.scores = X.orig%*%v_hat
@@ -774,7 +801,7 @@ supPCoA <- function(obj, lambda_ls, pcoa){
         title = "s+acPCA (Residualization)"
       }
    
-      pc_ls <- pc_train_function(PC.scores_train, Y_train, pcoa=pcoa, alpha=0.8, title = title)
+      pc_ls <- pc_train_function(PC.scores, Y, pcoa=pcoa, alpha=0.8, title = title)
       
       pc_plot <- pc_ls$pc_plot
       pc_df <- pc_ls$pc_df 
@@ -782,6 +809,7 @@ supPCoA <- function(obj, lambda_ls, pcoa){
       return(list(pc_plot = pc_plot, pc_df = pc_df, results = results, PC.scores = PC.scores,   v_hat = v_hat, lambda_optimal_ls=lambda_optimal_ls, U_df = U_df,eigen_values = eigen_values_out ))
     
   }
+  
 
 
 
@@ -956,8 +984,7 @@ generate_data <- function(seed, n,p,l, cor_val, y_type){
 }
 
 
-
-            pc_train_function <- function(PC.scores_train, Y_train, pcoa, alpha = 0.8, title = "PC Plot"){
+pc_train_function <- function(PC.scores_train, Y_train, pcoa, alpha = 0.8, title = "PC Plot"){
   train_pc_long <- PC.scores_train%>%
     as.data.frame()%>%
     dplyr::mutate(Y = Y_train)%>%
