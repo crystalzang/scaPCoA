@@ -1,6 +1,6 @@
-# supPCoA
+# scaPCoA
 
-# supPCoA: Supervised and covariate adjusted principal coordinate analysis
+# scaPCoA: Supervised and Covariate Adjusted Principal CoOrdinate Analysis
 
 Given that the gut microbiome has been shown to play a critical role in human health and dis-
 ease, discerning the relationship between microbial features and disease outcomes is often of interest
@@ -22,13 +22,14 @@ and metagenomic sequencing studies.
 ## Usage
 
 1. Visualization
-   `supPCoA` can be used to visualize principal coordinate.
+   `scapcoa` can be used to visualize principal coordinate.
 2. Prediction
-   `supPCoA` can be used to make prediction on outcome (continuous or binary) given microbiome and covariates.
+   `scapcoa` can be used to make prediction on outcome (continuous or binary) given microbiome and covariates.
 
 
 ## Main Function
 ```
+obj = generate_data(seed=1, n=100, p=200, l=3, cor_val=0.4, y_type='bin')
 lambda_ls = seq(0, 10, 0.5)
 results = supPCoA(obj, lambda_ls, nPC = 3, pcoa=TRUE)
 
