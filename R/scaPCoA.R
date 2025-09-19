@@ -693,7 +693,7 @@ estimate_x_star <- function(X.orig, Y, A, npc, lambda_ls) {
     # }
   })
 }
-supPCoA <- function(obj, lambda_ls, pcoa, nPC=3){
+scapcoa <- function(obj, lambda_ls, pcoa, nPC=3){
     results = list()
     lambda_optimal_ls <- list()
     
@@ -812,26 +812,37 @@ supPCoA <- function(obj, lambda_ls, pcoa, nPC=3){
   
 
 
-
-generate_data <- function(seed, n,p,l, cor_val, y_type){
+  generate_data <- function(seed, n,p,l, cor_val, y_type){
   set.seed(seed)
-  mu <- rep(0, l)
+  print(paste("Generate data with seed =", seed))
+  mu <- rep(0, 2)
   
   #### Generate A ####
   # Generate the block-wise correlation matrix
   # Construct correlation matrix
-  sigma <- matrix(cor_val, nrow = l, ncol = l) + diag(1 - cor_val, l)
+  sigma <- matrix(cor_val, nrow = 2, ncol = 2) + diag(1 - cor_val, 2)
   
   # Force positive semi-definiteness
-  sigma <- as.matrix(nearPD(sigma, corr = TRUE)$mat)
+  # sigma <- as.matrix(nearPD(sigma, corr = TRUE)$mat)
   
   
   A <- mvrnorm(n = n, mu = mu, Sigma = sigma)   # Generate Ai,1 and Ai,2
-  A[, 2] <- rbinom(n, 1, 0.1) # this works
+  A3 <- rbinom(n, 1, 0.3) # previously 0.1, which worked, however, leads to A_test all 0 this works
+  A <- cbind(A, A3)
+  A <- as.data.frame(A)
+  colnames(A)  <- paste0("A", 1:3)
   
+  A[,1] <- scale(A[,1], center = TRUE, scale = TRUE)
+  A[,2] <- scale(A[,2], center = TRUE, scale = TRUE)
+  
+  
+  #### Generate X (feature) ####
   set.seed(seed)
   n = as.numeric(n)
-  N.d = zinLDA::rdu(n = n, min = 1000, max = 10000)
+  N.d = zinLDA::rdu(n = n, min = 1000, max = 30000) #should try 1,000 - 30,000
+  #print('N.d: 100-1000')
+  print('N.d: 1,000-30,000')
+  print("Simulate ZINLDA")
   sim1 = zinLDA::simulateZINLDA(D = n, #number of sample
                                 V = p,  #number of feature
                                 N = N.d, #vector of length D containing the total number of sequencing readings per sample.
@@ -841,124 +852,159 @@ generate_data <- function(seed, n,p,l, cor_val, y_type){
                                 a = 0.6, # Increase to allow structured feature correlations
                                 b = 10#lower more sparse (b=2:prop = 0.89, b=0.2:p=0.965, b=7:prop=0.76)
   )
-  
+  print("Finish Simulate ZINLDA")
   data <-  as.data.frame(sim1$sampleTaxaMatrix)
   
-  sum(colSums(data)==0)/p
-  
-  #prop_feature_zero = apply(data, 2, function(col) sum(col==0)/length(col))
-  #hist(prop_feature_zero)
-  
-  #prop_sample_zero = apply(data, 1, function(row) sum(row==0)/length(row))
-  #hist(prop_sample_zero)
   
   data_c <- data[, colSums(data != 0) > 0]
   data_c <- data_c[, apply(data_c, 2, var) != 0]
   data_c <- data_c[rowSums(data_c != 0) > 0, ]
-  #dim(data_c)
   print(paste("Exclude features with all zeros. Exclude features with variance of zero. 
               Number of features = ",dim(data_c)[2]))
   
   
-  # normalized
-  data_rel = apply(data_c, 2, function(x) x / sum(x))
-  X <- as.matrix(data_rel)
+  X <- as.matrix(data_c)
   
-  hist(cor(X, A[,1]))
+  #x_mean = mean(X) #overall mean
+  x_means <- rowMeans(X)   #sample mean
+  
   # Add some correlation between X and A.
   num_feature = ncol(X)
   num_sample = nrow(X)
+  
   # 1. Construct features correlated with A1
-  n_selected <- ceiling(0.6 * num_feature) #Randomly select 30% of the columns in X
+  print("Randomly select 50% of the columns in X")
+  n_selected <- ceiling(0.5 * num_feature)
   set.seed(seed)
   selected_cols <- sample(1:num_feature, n_selected)
-  # Construct a signal matrix from the selected X columns
-  error1 <- rnorm(num_sample, mean = 0, sd = 0.4)
-  error1[error1 < 0] <- 0
-  for (j in selected_cols) {
-    X[, j] <- X[, j] + 0.2 * (A[, 1]-min(A[,1])) + error1
-  }
   
+  # Construct a signal matrix from the selected X columns
+  error1 <- rnorm(num_sample, mean = 0, sd = 1)
+  error1 <- abs(error1)
+  #error1[error1 < 0] <- 0
+  # A1 (mean=2.26, sd = 0.9)
+  for (j in selected_cols) {
+    #print(paste("Mean =", mean(X[, j]), ", SD= ", sd(X[, j]), ", Prop zero=", sum(X[,j]==0)/length(X[,j])))
+    v <- ifelse(X[, j] == 0, 0, 1)   # vector of 0/1: 1 if nonzero, 0 if zero
+    
+    X[, j] <- X[, j] + x_means* v*(abs(A[, 1])) + v*error1
+    #X[, j] <- X[, j] + x_means* v*(A[, 1]-min(A[,1])) + v*error1
+    
+    #print(paste("**New** Mean =", mean(X[, j]), ", SD= ", sd(X[, j]), ", Prop zero=", sum(X[,j]==0)/length(X[,j])))
+  }
+  # 
   # 2. Construct features correlated with A2 and A3
   set.seed(seed+2)
   selected_cols <- sample(1:num_feature, n_selected)
-  # Construct a signal matrix from the selected X columns
-  error2 <- rnorm(num_sample, mean = 0, sd = 0.4)
-  error2[error2 < 0] <- 0
+  
+  ## Construct a signal matrix from the selected X columns
+  error2 <- rnorm(num_sample, mean = 0, sd = 1)
+  #error2[error2 < 0] <- 0
+  error2 <- abs(error2)
   for (j in selected_cols) {
-    X[, j] <- X[, j] + 0.3*A[,2] + 0.1 * (A[, 3]-min(A[,3])) + error2
+    # print(paste("Mean =", mean(X[, j]), ", SD= ", sd(X[, j]), ", Prop zero=", sum(X[,j]==0)/length(X[,j])))
+    v <- ifelse(X[, j] == 0, 0, 1)   # vector of 0/1: 1 if nonzero, 0 if zero
+    X[, j] <- X[, j] +  x_means*v*(abs(A[, 2])) + x_means* v*A[,3] + v*error2
+    #X[, j] <- X[, j] +  x_means*v*(A[, 2]-min(A[,2])) + x_means* v*A[,3] + v*error2
+    #print(paste("**New** Mean =", mean(X[, j]), ", SD= ", sd(X[, j]), ", Prop zero=", sum(X[,j]==0)/length(X[,j])))
   }
+  # rel abundance
+  X <- X / rowSums(X)
   
-  
-  X = apply(X, 2, function(x) x / sum(x))
-  
-  cor(X, A[,1])
-  hist(cor(X, A[,1]))
-  
-  # Compute the Pearson correlation matrix
+  #Evaluate correlations across features. Compute the Pearson correlation matrix of X
   cor_matrix <- cor(X, method = "pearson")
   heatmap(cor_matrix)
   hist(cor_matrix)
   
-  A <- as.data.frame(A)
-  colnames(A)  <- paste0("A", 1:l)
-  # correlation with covariates
-  correlation_feature_A <- cor(X, as.matrix(A))
-  hist(correlation_feature_A[,1])
   
+  ################ 
+  #### Generate W ####
   
-  # # Step 1: Generate W
+  #################  Option 3.
+  feature_mean <- data.frame(
+    feature = colnames(X),
+    mean_value = colMeans(X, na.rm = TRUE)
+  )
+  
+  cutoff = 0.5
+  # Upper triangle only (avoid duplicates & diagonal)
+  cor_upper <- cor_matrix
+  cor_upper[lower.tri(cor_upper, diag = TRUE)] <- NA
+  
+  # Extract pairs above cutoff
+  cor_pairs <- which(!is.na(cor_upper) & abs(cor_upper) > cutoff, arr.ind = TRUE)
+  edge_df <- data.frame(
+    feature1 = rownames(cor_matrix)[cor_pairs[,1]],
+    feature2 = colnames(cor_matrix)[cor_pairs[,2]],
+    correlation = cor_matrix[cor_pairs]
+  )
+  
+  # option 1. only consider correlation
+  feature_scores <- edge_df%>%
+    mutate(correlation = abs(correlation))%>%
+    gather(node, feature, -correlation)%>%
+    arrange(desc(correlation)) %>%
+    group_by(feature) %>%
+    slice_head(n = 1) %>%
+    ungroup()%>%
+    mutate(selected = row_number() <=15)
+  
   ## Option 1. Select the 10 features with the highest means
   feature_means <- colMeans(X)
   top_features <- names(sort(feature_means, decreasing = TRUE)[1:15])
   
-  #### Generate W ####
-  W <- X[, top_features] # option 1. (This works)
-  print("Top 15 features")
-
+  ## Option 2. Randomly select some features as W
+  set.seed(seed)
+  random_features <- sample(1:ncol(X), size = 15, replace = FALSE)
   
-  W_scaled = sweep(W, 1, rowSums(W)+1e-20, "/")
-  #print("Transform W_scaled as relative abundance.")
-  W_scaled <- log(W_scaled + 1e-8)
-  print("Transform W_scaled as log(relative abundance).")
+  ## Option 3. Select features that are in a community with other features and with high correlations
+  print("W: 15 features with high correlations.")
+  high_cor_features <- feature_scores%>%
+    filter(selected == TRUE)%>%
+    pull(feature)
   
+  # option 1. Top features
+  #W <- X[, top_features]
+  #print("W: Top 15 features")
+  
+  # option 2. Random features
+  #W <- X[, random_features] 
+  #print("W: 15 RANDOM features")
+  #hist(cor(W))
+  #heatmap(cor(W))
+  
+  ## Option 3. Select features that are in a community with other features and with high correlations
+  W <- X[, high_cor_features, drop = FALSE]
+  
+  #W_scaled <- W # try not scaling
+  #print("Not scaling of W.")
+  
+  W_scaled <- log(W + 1e-8)
+  # print("Transform W as log(relative abundance).")
+  
+  # Check distribution of W.
+  #W_long <- W_scaled%>%
+  #  as.data.frame()%>%
+  #  gather("taxa", "value")
+  #ggplot(W_long, aes(x = value, fill=taxa))+
+  #  geom_histogram()
   #W_scaled <- clr(W) #centerd log transformation, this leads to a decrease in partial correlation with Y in testing
   W_scaled <- W_scaled[, apply(W_scaled, 2, var) != 0]
   
   W_scaled <- as.matrix(W_scaled)
-  C_A <- as.matrix(rep(1, ncol(W_scaled)))
-  
-  
-  print(paste("Formula for non-linear relationship between A and W:", formula_aw))
-  
-  if(formula_aw =="0"){
-    print("No modification of A.")
-  }
-  
-  #print("Scale numeric covairates A.")
-  for(j in 1:ncol(A)){
-    if(length(table(A[,j])) > 2){
-      A[,j] <- scale(A[,j], center = TRUE, scale = TRUE)
-    }
-  }
-  #hist(A[,1])
-  
-  
-  # Step 2: Generate Z2_i ~ N(0,1) (n x 1 vector)
-  #Z2 <- rnorm(n, mean = 0, sd = 1)
-  
-  # Step 3: Compute subject-level probabilities π
+  C_A <- as.matrix(rep(1.5, ncol(W_scaled)))
+  print("C_A = 1.5")
+  # Compute subject-level probabilities π
   expit <- function(x) 1 / (1 + exp(-x))
   
   #### Generate Y ####
-  print(paste("Formula to generate Y:", formula_y))
   
+  linear_predictor <- W_scaled %*% C_A +A$A1 -A$A3 +A$A1 * A$A2
   
-  linear_predictor <- W_scaled %*% C_A + 0.3*A$A1 - 0.01*A$A2 + 0.1*A$A1 * A$A3
   lp_median <- -median(linear_predictor)
   linear_predictor <- linear_predictor + lp_median
-
-
+  
+  
   # Step 4: Generate pi ~ Bernoulli(π), and then generate Y from pi.
   if(y_type == "bin"){
     print("Binary Y")
@@ -966,19 +1012,20 @@ generate_data <- function(seed, n,p,l, cor_val, y_type){
     Y <- rbinom(n, size = 1, prob = pi)  # Draw realizations of binary outcomes
     print(table(Y))
   }else if(y_type == "cont"){
-    print("Continuous Y")
-    Y = scale(linear_predictor) # continuous Y
+    print("Continuous Y, error sd = 0.5.")
+    
+    error_y <- rnorm(num_sample, mean = 0, sd = 0.5) #gaussian error
+    Y = scale(linear_predictor) + error_y
   }
-
-  top_features <- sub("Feature", "V", top_features)
   
+  #top_features <- sub("Feature", "V", top_features)
   
   output = list(
-    A = A[,1:l],
+    A = A,
     Y = Y,
     W = W,
-    X_tilde = X,
-    top_features = top_features
+    X_tilde = X
+    #top_features = top_features
   )
   return(output)
 }
