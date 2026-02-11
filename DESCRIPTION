@@ -8,3 +8,18 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
+Imports:
+    MASS,
+    mltools,
+    ltm,
+    RSpectra,
+    rstatix,
+    vegan,
+    dplyr,
+    tidyr,
+    tibble,
+    zinLDA,
+    stats,
+    parallel,
+    magrittr,
+    compositions
