@@ -18,7 +18,8 @@ Given that the gut microbiome has been shown to play a critical role in human he
 
 You can install the development version of scaPCoA:
 ```{r, eval = FALSE}
-remotes::install_github("crystalzang/scaPCoA")
+library("devtools")
+devtools::install_github("crystalzang/scaPCoA")
 ```
 
 ## Usage
