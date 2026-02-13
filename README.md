@@ -30,7 +30,9 @@ sequencing studies.
 You can install the development version of scaPCoA:
 
 ``` r
-remotes::install_github("crystalzang/scaPCoA")
+library("devtools")
+devtools::install_github("crystalzang/scaPCoA")
+
 ```
 
 ## Usage
